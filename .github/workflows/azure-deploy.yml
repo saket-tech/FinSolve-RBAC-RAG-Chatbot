@@ -55,37 +55,12 @@ jobs:
           docker push ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.UI_IMAGE }}:${{ github.sha }}
           docker push ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.UI_IMAGE }}:latest
 
-      - name: Get or create Container Apps Environment
-        id: get_env
-        run: |
-          # Try to get environment name from secret first
-          ENV_NAME="${{ secrets.CONTAINERAPPS_ENV }}"
-          
-          # If secret is empty, try to find existing environment
-          if [ -z "$ENV_NAME" ]; then
-            echo "⚠️ CONTAINERAPPS_ENV secret not set, trying to find existing environment..."
-            ENV_NAME=$(az containerapp env list -g ${{ secrets.AZURE_RESOURCE_GROUP }} --query "[0].name" -o tsv 2>/dev/null || echo "")
-          fi
-          
-          # If still empty, create a new environment
-          if [ -z "$ENV_NAME" ]; then
-            echo "📦 Creating new Container Apps Environment..."
-            ENV_NAME="finsolve-env"
-            az containerapp env create \
-              --name $ENV_NAME \
-              --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
-              --location centralindia
-          fi
-          
-          echo "✅ Using Container Apps Environment: $ENV_NAME"
-          echo "env_name=$ENV_NAME" >> $GITHUB_OUTPUT
-
       - name: Deploy API to Container Apps
         run: |
           az containerapp create \
             --name finsolve-api \
             --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
-            --environment ${{ steps.get_env.outputs.env_name }} \
+            --environment finsolve-env \
             --image ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.API_IMAGE }}:${{ github.sha }} \
             --registry-server ${{ secrets.ACR_NAME }}.azurecr.io \
             --registry-username ${{ secrets.ACR_NAME }} \
@@ -125,7 +100,7 @@ jobs:
           az containerapp create \
             --name finsolve-ui \
             --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
-            --environment ${{ steps.get_env.outputs.env_name }} \
+            --environment finsolve-env \
             --image ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.UI_IMAGE }}:${{ github.sha }} \
             --registry-server ${{ secrets.ACR_NAME }}.azurecr.io \
             --registry-username ${{ secrets.ACR_NAME }} \
