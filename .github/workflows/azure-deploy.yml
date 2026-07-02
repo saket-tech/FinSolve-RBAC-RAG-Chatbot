@@ -57,38 +57,11 @@ jobs:
 
       - name: Deploy API to Container Apps
         run: |
-          echo "📦 Attempting to create container app..."
-          if az containerapp create \
-            --name finsolve-api \
-            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
-            --environment finsolve-env \
-            --image ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.API_IMAGE }}:${{ github.sha }} \
-            --registry-server ${{ secrets.ACR_NAME }}.azurecr.io \
-            --registry-username ${{ secrets.ACR_NAME }} \
-            --registry-password ${{ secrets.ACR_PASSWORD }} \
-            --target-port 8000 \
-            --ingress external \
-            --cpu 1.0 \
-            --memory 2.0Gi \
-            --min-replicas 1 \
-            --max-replicas 2 \
-            --env-vars "GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}" "JWT_SECRET=${{ secrets.JWT_SECRET }}" "GROQ_MODEL=llama-3.3-70b-versatile" "LANGSMITH_API_KEY=${{ secrets.LANGSMITH_API_KEY }}" "LANGSMITH_PROJECT=finsolve-chatbot" 2>&1 | tee /tmp/create_output.txt; then
-            echo "✅ Container app created successfully!"
-          else
-            if grep -q "already exists" /tmp/create_output.txt || grep -q "ConflictError" /tmp/create_output.txt; then
-              echo "⚠️ Container app already exists, updating instead..."
-              az containerapp update \
-                --name finsolve-api \
-                --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
-                --image ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.API_IMAGE }}:${{ github.sha }} \
-                --set-env-vars "GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}" "JWT_SECRET=${{ secrets.JWT_SECRET }}" "GROQ_MODEL=llama-3.3-70b-versatile" "LANGSMITH_API_KEY=${{ secrets.LANGSMITH_API_KEY }}" "LANGSMITH_PROJECT=finsolve-chatbot"
-              echo "✅ Container app updated successfully!"
-            else
-              echo "❌ Failed to create container app"
-              cat /tmp/create_output.txt
-              exit 1
-            fi
-          fi
+          echo "📦 Creating container app finsolve-api..."
+          
+          az containerapp create --name finsolve-api --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} --environment finsolve-env --image ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.API_IMAGE }}:${{ github.sha }} --registry-server ${{ secrets.ACR_NAME }}.azurecr.io --registry-username ${{ secrets.ACR_NAME }} --registry-password ${{ secrets.ACR_PASSWORD }} --target-port 8000 --ingress external --cpu 1.0 --memory 2.0Gi --min-replicas 1 --max-replicas 2 --env-vars "GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}" "JWT_SECRET=${{ secrets.JWT_SECRET }}" "GROQ_MODEL=llama-3.3-70b-versatile" "LANGSMITH_API_KEY=${{ secrets.LANGSMITH_API_KEY }}" "LANGSMITH_PROJECT=finsolve-chatbot" || az containerapp update --name finsolve-api --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} --image ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.API_IMAGE }}:${{ github.sha }} --set-env-vars "GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}" "JWT_SECRET=${{ secrets.JWT_SECRET }}" "GROQ_MODEL=llama-3.3-70b-versatile" "LANGSMITH_API_KEY=${{ secrets.LANGSMITH_API_KEY }}" "LANGSMITH_PROJECT=finsolve-chatbot"
+          
+          echo "✅ Container app deployed successfully!"
 
       - name: Get API FQDN
         id: api_url
@@ -101,38 +74,11 @@ jobs:
 
       - name: Deploy Streamlit to Container Apps
         run: |
-          echo "📦 Attempting to create container app..."
-          if az containerapp create \
-            --name finsolve-ui \
-            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
-            --environment finsolve-env \
-            --image ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.UI_IMAGE }}:${{ github.sha }} \
-            --registry-server ${{ secrets.ACR_NAME }}.azurecr.io \
-            --registry-username ${{ secrets.ACR_NAME }} \
-            --registry-password ${{ secrets.ACR_PASSWORD }} \
-            --target-port 8501 \
-            --ingress external \
-            --cpu 0.5 \
-            --memory 1.0Gi \
-            --min-replicas 1 \
-            --max-replicas 2 \
-            --env-vars "API_URL=${{ steps.api_url.outputs.url }}" 2>&1 | tee /tmp/create_ui_output.txt; then
-            echo "✅ Container app created successfully!"
-          else
-            if grep -q "already exists" /tmp/create_ui_output.txt || grep -q "ConflictError" /tmp/create_ui_output.txt; then
-              echo "⚠️ Container app already exists, updating instead..."
-              az containerapp update \
-                --name finsolve-ui \
-                --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
-                --image ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.UI_IMAGE }}:${{ github.sha }} \
-                --set-env-vars "API_URL=${{ steps.api_url.outputs.url }}"
-              echo "✅ Container app updated successfully!"
-            else
-              echo "❌ Failed to create container app"
-              cat /tmp/create_ui_output.txt
-              exit 1
-            fi
-          fi
+          echo "📦 Creating container app finsolve-ui..."
+          
+          az containerapp create --name finsolve-ui --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} --environment finsolve-env --image ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.UI_IMAGE }}:${{ github.sha }} --registry-server ${{ secrets.ACR_NAME }}.azurecr.io --registry-username ${{ secrets.ACR_NAME }} --registry-password ${{ secrets.ACR_PASSWORD }} --target-port 8501 --ingress external --cpu 0.5 --memory 1.0Gi --min-replicas 1 --max-replicas 2 --env-vars "API_URL=${{ steps.api_url.outputs.url }}" || az containerapp update --name finsolve-ui --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} --image ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.UI_IMAGE }}:${{ github.sha }} --set-env-vars "API_URL=${{ steps.api_url.outputs.url }}"
+          
+          echo "✅ Container app deployed successfully!"
 
       - name: Show deployment URLs
         run: |
