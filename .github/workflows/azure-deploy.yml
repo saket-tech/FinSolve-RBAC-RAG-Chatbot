@@ -58,7 +58,7 @@ jobs:
       - name: Deploy API to Container Apps
         run: |
           # Create container app or update if exists
-          if az containerapp show --name finsolve-api --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} &>/dev/null; then
+          if az containerapp show --name finsolve-api --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} 2>/dev/null; then
             echo "Container app exists, updating..."
             az containerapp update \
               --name finsolve-api \
@@ -96,7 +96,7 @@ jobs:
       - name: Deploy Streamlit to Container Apps
         run: |
           # Create container app or update if exists
-          if az containerapp show --name finsolve-ui --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} &>/dev/null; then
+          if az containerapp show --name finsolve-ui --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} 2>/dev/null; then
             echo "Container app exists, updating..."
             az containerapp update \
               --name finsolve-ui \
