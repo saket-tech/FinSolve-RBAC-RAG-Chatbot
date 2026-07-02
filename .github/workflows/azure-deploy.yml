@@ -1,0 +1,83 @@
+name: Deploy to Azure Container Apps
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  API_IMAGE: finsolve-api
+  UI_IMAGE: finsolve-ui
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Log in to Azure Container Registry
+        uses: azure/docker-login@v2
+        with:
+          login-server: ${{ secrets.ACR_NAME }}.azurecr.io
+          username: ${{ secrets.ACR_NAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Build and push API image
+        run: |
+          docker build -f Dockerfile.api -t ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.API_IMAGE }}:${{ github.sha }} .
+          docker build -f Dockerfile.api -t ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.API_IMAGE }}:latest .
+          docker push ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.API_IMAGE }}:${{ github.sha }}
+          docker push ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.API_IMAGE }}:latest
+
+      - name: Build and push Streamlit image
+        run: |
+          docker build -f Dockerfile.streamlit -t ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.UI_IMAGE }}:${{ github.sha }} .
+          docker build -f Dockerfile.streamlit -t ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.UI_IMAGE }}:latest .
+          docker push ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.UI_IMAGE }}:${{ github.sha }}
+          docker push ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.UI_IMAGE }}:latest
+
+      - name: Deploy API to Container Apps
+        uses: azure/container-apps-deploy-action@v2
+        with:
+          acrName: ${{ secrets.ACR_NAME }}
+          containerAppName: finsolve-api
+          resourceGroup: ${{ secrets.AZURE_RESOURCE_GROUP }}
+          imageToDeploy: ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.API_IMAGE }}:${{ github.sha }}
+          environmentVariables: |
+            GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}
+            JWT_SECRET=${{ secrets.JWT_SECRET }}
+            GROQ_MODEL=llama-3.3-70b-versatile
+            LANGSMITH_API_KEY=${{ secrets.LANGSMITH_API_KEY }}
+            LANGSMITH_PROJECT=finsolve-chatbot
+
+      - name: Get API FQDN
+        id: api_url
+        run: |
+          FQDN=$(az containerapp show \
+            --name finsolve-api \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+            --query properties.configuration.ingress.fqdn -o tsv)
+          echo "url=https://$FQDN" >> $GITHUB_OUTPUT
+
+      - name: Deploy Streamlit to Container Apps
+        uses: azure/container-apps-deploy-action@v2
+        with:
+          acrName: ${{ secrets.ACR_NAME }}
+          containerAppName: finsolve-ui
+          resourceGroup: ${{ secrets.AZURE_RESOURCE_GROUP }}
+          imageToDeploy: ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.UI_IMAGE }}:${{ github.sha }}
+          environmentVariables: |
+            API_URL=${{ steps.api_url.outputs.url }}
+
+      - name: Run post-deploy Ragas evaluations
+        run: |
+          pip install ragas datasets requests
+          API_URL=${{ steps.api_url.outputs.url }} python scripts/run_evals.py
+        env:
+          LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}

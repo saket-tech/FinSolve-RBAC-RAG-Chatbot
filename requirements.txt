@@ -1,0 +1,17 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+streamlit==1.41.1
+requests==2.32.3
+python-jose[cryptography]==3.3.0
+pydantic-settings==2.7.1
+groq==0.13.1
+chromadb==0.5.23
+sentence-transformers==3.3.1
+langchain-text-splitters==0.3.4
+pandas==2.2.3
+python-dotenv==1.0.1
+# Monitoring & tracing
+langsmith==0.1.147
+# Evaluation (only needed in CI/eval scripts)
+ragas==0.2.6
+datasets==3.2.0
