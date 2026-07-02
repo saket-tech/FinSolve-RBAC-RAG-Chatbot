@@ -57,16 +57,20 @@ jobs:
 
       - name: Deploy API to Container Apps
         run: |
-          # Create container app or update if exists
-          if az containerapp show --name finsolve-api --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} 2>/dev/null; then
-            echo "Container app exists, updating..."
+          set +e  # Disable exit on error temporarily
+          az containerapp show --name finsolve-api --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} > /dev/null 2>&1
+          EXISTS=$?
+          set -e  # Re-enable exit on error
+          
+          if [ $EXISTS -eq 0 ]; then
+            echo "✅ Container app exists, updating..."
             az containerapp update \
               --name finsolve-api \
               --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
               --image ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.API_IMAGE }}:${{ github.sha }} \
               --set-env-vars "GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}" "JWT_SECRET=${{ secrets.JWT_SECRET }}" "GROQ_MODEL=llama-3.3-70b-versatile" "LANGSMITH_API_KEY=${{ secrets.LANGSMITH_API_KEY }}" "LANGSMITH_PROJECT=finsolve-chatbot"
           else
-            echo "Container app does not exist, creating..."
+            echo "📦 Container app does not exist, creating..."
             az containerapp create \
               --name finsolve-api \
               --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
@@ -95,16 +99,20 @@ jobs:
 
       - name: Deploy Streamlit to Container Apps
         run: |
-          # Create container app or update if exists
-          if az containerapp show --name finsolve-ui --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} 2>/dev/null; then
-            echo "Container app exists, updating..."
+          set +e  # Disable exit on error temporarily
+          az containerapp show --name finsolve-ui --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} > /dev/null 2>&1
+          EXISTS=$?
+          set -e  # Re-enable exit on error
+          
+          if [ $EXISTS -eq 0 ]; then
+            echo "✅ Container app exists, updating..."
             az containerapp update \
               --name finsolve-ui \
               --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
               --image ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.UI_IMAGE }}:${{ github.sha }} \
               --set-env-vars "API_URL=${{ steps.api_url.outputs.url }}"
           else
-            echo "Container app does not exist, creating..."
+            echo "📦 Container app does not exist, creating..."
             az containerapp create \
               --name finsolve-ui \
               --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
