@@ -23,11 +23,13 @@ jobs:
           if [ -z "${{ secrets.ACR_NAME }}" ]; then echo "❌ ACR_NAME is missing"; exit 1; fi
           if [ -z "${{ secrets.ACR_PASSWORD }}" ]; then echo "❌ ACR_PASSWORD is missing"; exit 1; fi
           if [ -z "${{ secrets.AZURE_RESOURCE_GROUP }}" ]; then echo "❌ AZURE_RESOURCE_GROUP is missing"; exit 1; fi
+          if [ -z "${{ secrets.AZURE_LOCATION }}" ]; then echo "❌ AZURE_LOCATION is missing"; exit 1; fi
           if [ -z "${{ secrets.GROQ_API_KEY }}" ]; then echo "❌ GROQ_API_KEY is missing"; exit 1; fi
           if [ -z "${{ secrets.JWT_SECRET }}" ]; then echo "❌ JWT_SECRET is missing"; exit 1; fi
           echo "✅ All required secrets are present"
           echo "Resource Group: ${{ secrets.AZURE_RESOURCE_GROUP }}"
           echo "ACR Name: ${{ secrets.ACR_NAME }}"
+          echo "Location: ${{ secrets.AZURE_LOCATION }}"
 
       - name: Log in to Azure
         uses: azure/login@v2
@@ -55,24 +57,42 @@ jobs:
           docker push ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.UI_IMAGE }}:${{ github.sha }}
           docker push ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.UI_IMAGE }}:latest
 
-      - name: Deploy API to Container Apps
-        run: |
-          echo "📦 Creating container app finsolve-api..."
-          
-          az containerapp create --name finsolve-api --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} --environment finsolve-env --image ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.API_IMAGE }}:${{ github.sha }} --registry-server ${{ secrets.ACR_NAME }}.azurecr.io --registry-username ${{ secrets.ACR_NAME }} --registry-password ${{ secrets.ACR_PASSWORD }} --target-port 8000 --ingress external --cpu 1.0 --memory 2.0Gi --min-replicas 1 --max-replicas 2 --env-vars "GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}" "JWT_SECRET=${{ secrets.JWT_SECRET }}" "GROQ_MODEL=llama-3.3-70b-versatile" "LANGSMITH_API_KEY=${{ secrets.LANGSMITH_API_KEY }}" "LANGSMITH_PROJECT=finsolve-chatbot" || az containerapp update --name finsolve-api --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} --image ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.API_IMAGE }}:${{ github.sha }} --set-env-vars "GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}" "JWT_SECRET=${{ secrets.JWT_SECRET }}" "GROQ_MODEL=llama-3.3-70b-versatile" "LANGSMITH_API_KEY=${{ secrets.LANGSMITH_API_KEY }}" "LANGSMITH_PROJECT=finsolve-chatbot"
-          
-          echo "✅ Container app deployed successfully!"
-
       - name: Ensure Container Apps environment
         run: |
           set -euo pipefail
           echo "Checking for Container Apps environment 'finsolve-env'..."
           if ! az containerapp env show --name finsolve-env --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" >/dev/null 2>&1; then
             echo "Environment not found; creating 'finsolve-env' in resource group ${{ secrets.AZURE_RESOURCE_GROUP }}"
-            az containerapp env create --name finsolve-env --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" --location "${{ secrets.AZURE_LOCATION }}" || echo "Failed to create environment; please ensure AZURE_LOCATION secret is set or create env manually."
+            az containerapp env create \
+              --name finsolve-env \
+              --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
+              --location "${{ secrets.AZURE_LOCATION }}"
           else
-            echo "Environment exists."
+            echo "✅ Environment exists."
           fi
+
+      - name: Deploy API to Container Apps
+        run: |
+          echo "📦 Creating container app finsolve-api..."
+          az containerapp create \
+            --name finsolve-api \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+            --environment finsolve-env \
+            --image ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.API_IMAGE }}:latest \
+            --registry-login-server ${{ secrets.ACR_NAME }}.azurecr.io \
+            --registry-username ${{ secrets.ACR_NAME }} \
+            --registry-password "${{ secrets.ACR_PASSWORD }}" \
+            --target-port 8000 \
+            --ingress external \
+            --cpu 0.5 \
+            --memory 1Gi \
+            --env-vars \
+              GROQ_API_KEY=${{ secrets.GROQ_API_KEY }} \
+              JWT_SECRET=${{ secrets.JWT_SECRET }}
+              GROQ_MODEL=llama-3.3-70b-versatile \
+              LANGSMITH_API_KEY=${{ secrets.LANGSMITH_API_KEY }} \
+              LANGSMITH_PROJECT=finsolve-chatbot || true
+          echo "✅ Container app deployed successfully!"
 
       - name: Get API FQDN
         id: api_url
@@ -89,9 +109,22 @@ jobs:
       - name: Deploy Streamlit to Container Apps
         run: |
           echo "📦 Creating container app finsolve-ui..."
-          
-          az containerapp create --name finsolve-ui --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} --environment finsolve-env --image ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.UI_IMAGE }}:${{ github.sha }} --registry-server ${{ secrets.ACR_NAME }}.azurecr.io --registry-username ${{ secrets.ACR_NAME }} --registry-password ${{ secrets.ACR_PASSWORD }} --target-port 8501 --ingress external --cpu 0.5 --memory 1.0Gi --min-replicas 1 --max-replicas 2 --env-vars "API_URL=${{ steps.api_url.outputs.url }}" || az containerapp update --name finsolve-ui --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} --image ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.UI_IMAGE }}:${{ github.sha }} --set-env-vars "API_URL=${{ steps.api_url.outputs.url }}"
-          
+          az containerapp create \
+            --name finsolve-ui \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+            --environment finsolve-env \
+            --image ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.UI_IMAGE }}:latest \
+            --registry-login-server ${{ secrets.ACR_NAME }}.azurecr.io \
+            --registry-username ${{ secrets.ACR_NAME }} \
+            --registry-password "${{ secrets.ACR_PASSWORD }}" \
+            --target-port 8501 \
+            --ingress external \
+            --cpu 0.5 \
+            --memory 1Gi \
+            --env-vars \
+              GROQ_API_KEY=${{ secrets.GROQ_API_KEY }} \
+              JWT_SECRET=${{ secrets.JWT_SECRET }}
+              API_URL=${{ steps.api_url.outputs.url }} || true
           echo "✅ Container app deployed successfully!"
 
       - name: Show deployment URLs
